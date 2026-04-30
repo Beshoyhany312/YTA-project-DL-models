@@ -4,4 +4,4 @@ numpy
 fpdf
 scikit-learn
 joblib
-tensorflow-cpu
+tensorflow==2.19.0
