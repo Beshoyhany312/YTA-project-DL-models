@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+plotly
+fpdf
+scikit-learn
+joblib
+tensorflow==2.19.0
