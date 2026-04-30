@@ -2,7 +2,6 @@ import os
 import numpy as np
 import pandas as pd
 import streamlit as st
-import plotly.graph_objects as go
 import joblib
 from fpdf import FPDF
 from datetime import datetime
@@ -195,25 +194,31 @@ def preprocess_site(raw: dict, scaler) -> np.ndarray:
 def monthly_trend(base: float) -> list:
     return [round(base * (1 + 0.25 * np.cos((i - 6) / 1.9)), 2) for i in range(12)]
 
-def plot_trend(values: list, currency: str, color: str) -> go.Figure:
-    fig = go.Figure()
-    r, g, b = int(color[1:3],16), int(color[3:5],16), int(color[5:7],16)
-    fig.add_trace(go.Scatter(
-        x=MONTHS, y=values, mode='lines+markers',
-        line=dict(color=color, width=3),
-        marker=dict(size=8, color=color),
-        fill='tozeroy',
-        fillcolor=f'rgba({r},{g},{b},0.12)',
-    ))
-    fig.update_layout(
-        plot_bgcolor='#0d1117', paper_bgcolor='#0d1117',
-        font=dict(color='#8b949e', family='Outfit'),
-        xaxis=dict(showgrid=False, color='#8b949e'),
-        yaxis=dict(showgrid=True, gridcolor='#21262d', color='#8b949e',
-                   title=f"Estimated Cost ({currency})"),
-        margin=dict(l=20, r=20, t=30, b=20), height=320,
-    )
-    return fig
+def plot_trend(values: list, currency: str, color: str) -> str:
+    """Renders a responsive SVG area chart — no external library needed."""
+    w, h, pad_l, pad_r, pad_t, pad_b = 700, 280, 55, 20, 20, 40
+    chart_w = w - pad_l - pad_r
+    chart_h = h - pad_t - pad_b
+    min_v, max_v = min(values), max(values)
+    span = max_v - min_v if max_v != min_v else 1
+    def cx(i):   return pad_l + i * chart_w / (len(values) - 1)
+    def cy(v):   return pad_t + chart_h - (v - min_v) / span * chart_h
+    pts  = " ".join(f"{cx(i):.1f},{cy(v):.1f}" for i, v in enumerate(values))
+    area = pts + f" {cx(len(values)-1):.1f},{pad_t+chart_h} {cx(0):.1f},{pad_t+chart_h}"
+    grid_lines = ""
+    for k in range(5):
+        val2 = min_v + k * span / 4
+        y    = cy(val2)
+        grid_lines += f'<line x1="{pad_l}" y1="{y:.1f}" x2="{w-pad_r}" y2="{y:.1f}" stroke="#21262d" stroke-width="1"/>'
+        grid_lines += f'<text x="{pad_l-6}" y="{y+4:.1f}" text-anchor="end" font-size="10" fill="#8b949e">{val2:,.0f}</text>'
+    x_labels = ""
+    for i, m in enumerate(MONTHS):
+        x_labels += f'<text x="{cx(i):.1f}" y="{h-6}" text-anchor="middle" font-size="10" fill="#8b949e">{m}</text>'
+    dots = ""
+    for i, v in enumerate(values):
+        dots += f'<circle cx="{cx(i):.1f}" cy="{cy(v):.1f}" r="4" fill="{color}" stroke="#0d1117" stroke-width="2"/>'
+    r2, g2, b2 = int(color[1:3],16), int(color[3:5],16), int(color[5:7],16)
+    return f'<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" style="width:100%;background:#0d1117;border-radius:10px;"><defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba({r2},{g2},{b2},0.35)"/><stop offset="100%" stop-color="rgba({r2},{g2},{b2},0.02)"/></linearGradient></defs>{grid_lines}<polygon points="{area}" fill="url(#ag)"/><polyline points="{pts}" fill="none" stroke="{color}" stroke-width="2.5" stroke-linejoin="round"/>{dots}{x_labels}</svg>'
 
 def zone_egp(val):
     if val < 300:   return "#a78bfa", "Low Consumption Zone",      "Great efficiency — below average for this configuration."
@@ -488,7 +493,7 @@ with tab1:
                     chart_col, pdf_col = st.columns([3, 1])
                     with chart_col:
                         st.markdown("#### 12-Month Cost Forecast")
-                        st.plotly_chart(plot_trend(monthly_trend(bill), "EGP", "#a78bfa"), use_container_width=True)
+                        st.markdown(plot_trend(monthly_trend(bill), "EGP", "#a78bfa"), unsafe_allow_html=True)
                     with pdf_col:
                         st.markdown("#### Download Report")
                         st.markdown("<br>", unsafe_allow_html=True)
@@ -601,7 +606,7 @@ with tab2:
                     chart_col2, pdf_col2 = st.columns([3, 1])
                     with chart_col2:
                         st.markdown("#### 12-Month Cost Forecast")
-                        st.plotly_chart(plot_trend(monthly_trend(cost), "USD", "#ec4899"), use_container_width=True)
+                        st.markdown(plot_trend(monthly_trend(cost), "USD", "#ec4899"), unsafe_allow_html=True)
                     with pdf_col2:
                         st.markdown("#### Download Report")
                         st.markdown("<br>", unsafe_allow_html=True)
